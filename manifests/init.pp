@@ -243,6 +243,12 @@
 #    All entities will be created in the default domain.
 #    Default to undefined
 #
+#  [*overview_days_range*]
+#    (optional) The default date range in the Overview panel meters - either <today> minus N
+#    days (if the value is integer N), or from the beginning of the current month
+#    until today (if set to None). This setting should be used to limit the amount
+#    of data fetched by default when rendering the Overview panel.
+#
 # === Examples
 #
 #  class { 'horizon':
@@ -301,6 +307,7 @@ class horizon(
   $api_versions                        = {},
   $keystone_multidomain_support        = false,
   $keystone_default_domain             = undef,
+  $overview_days_range                 = undef,
   # DEPRECATED PARAMETERS
   $can_set_mount_point                 = undef,
   $vhost_extra_params                  = undef,
