@@ -622,17 +622,6 @@ UNDERCLOUD_ADMIN_PASSWORD = "<%= @tuskar_ui_undercloud_admin_password %>"
 DEPLOYMENT_MODE = "<%= @tuskar_ui_deployment_mode %>"
 <% end %>
 
-# Horizon doesn't know status of nova quotas. As result user may change
-# nova quotas in horizon UI, while actually they are turned off in nova. To avoid such
-# confusion ENABLED_QUOTA_GROUPS option were added. LP: 1286099, 1332457
-ENABLED_QUOTA_GROUPS = {
-<% if scope.lookupvar('::openstack::horizon::nova_quota') %>
-    'nova': True
-<% else %>
-    'nova': False
-<% end %>
-}
-
 # The default date range in the Overview panel meters - either <today> minus N
 # days (if the value is integer N), or from the beginning of the current month
 # until today (if set to None). This setting should be used to limit the amount
