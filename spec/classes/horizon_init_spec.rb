@@ -25,17 +25,28 @@ describe 'horizon' do
 
     context 'with default parameters' do
       it {
-          is_expected.to contain_package('python-lesscpy').with_ensure('present')
           is_expected.to contain_package('horizon').with(
             :ensure => 'present',
             :tag    => ['openstack', 'horizon-package'],
           )
       }
-      it { is_expected.to contain_exec('refresh_horizon_django_cache').with({
+      it {
+        if facts[:os_package_type] == 'rpm'
+          is_expected.to contain_exec('refresh_horizon_django_cache').with({
           :command     => '/usr/share/openstack-dashboard/manage.py collectstatic --noinput --clear && /usr/share/openstack-dashboard/manage.py compress --force',
           :refreshonly => true,
-      })}
-      it { is_expected.to contain_concat(platforms_params[:config_file]).that_notifies('Exec[refresh_horizon_django_cache]') }
+          })
+        else
+          is_expected.to_not contain_exec('refresh_horizon_django_cache')
+        end
+      }
+      it {
+        if facts[:os_package_type] == 'rpm'
+          is_expected.to contain_concat(platforms_params[:config_file]).that_notifies('Exec[refresh_horizon_django_cache]')
+        else
+          is_expected.to_not contain_concat(platforms_params[:config_file]).that_notifies('Exec[refresh_horizon_django_cache]')
+        end
+      }
 
       it 'configures apache' do
         is_expected.to contain_class('horizon::wsgi::apache').with({
@@ -107,7 +118,8 @@ describe 'horizon' do
           :api_versions                 => {'identity' => 3},
           :keystone_multidomain_support => true,
           :keystone_default_domain      => 'domain.tld',
-          :overview_days_range          => 1
+          :overview_days_range          => 1,
+          :session_timeout              => 1800,
         })
       end
 
@@ -145,6 +157,7 @@ describe 'horizon' do
           "CUSTOM_THEME_PATH = 'static/themes/green'",
           "            'level': 'DEBUG',",
           "            'handlers': ['syslog'],",
+          "SESSION_TIMEOUT = 1800",
           'COMPRESS_OFFLINE = False',
           "FILE_UPLOAD_TEMP_DIR = '/var/spool/horizon'",
           "OVERVIEW_DAYS_RANGE = 1"
@@ -169,7 +182,13 @@ describe 'horizon' do
         ])
       end
 
-      it { is_expected.to contain_exec('refresh_horizon_django_cache') }
+      it {
+        if facts[:os_package_type] == 'rpm'
+          is_expected.to contain_exec('refresh_horizon_django_cache')
+        else
+          is_expected.to_not contain_exec('refresh_horizon_django_cache')
+        end
+      }
     end
 
     context 'with tuskar-ui enabled' do
@@ -334,6 +353,56 @@ describe 'horizon' do
 
       it { is_expected.not_to contain_file(params[:file_upload_temp_dir]) }
     end
+
+    context 'with image_backend' do
+      before do
+        params.merge!({
+          :image_backend => {
+            'image_formats' => {
+              ''      => 'Select image format',
+              'aki'   => 'AKI - Amazon Kernel Image',
+              'ami'   => 'AMI - Amazon Machine Image',
+              'ari'   => 'ARI - Amazon Ramdisk Image',
+              'iso'   => 'ISO - Optical Disk Image',
+              'qcow2' => 'QCOW2 - QEMU Emulator',
+              'raw'   => 'Raw',
+              'vdi'   => 'VDI',
+              'vhi'   => 'VHI',
+              'vmdk'  => 'VMDK',
+            },
+            'architectures' => {
+              ''        => 'Select architecture',
+              'x86_64'  => 'x86-64',
+              'aarch64' => 'ARMv8',
+            },
+          },
+        })
+      end
+
+      it 'configures OPENSTACK_IMAGE_BACKEND' do
+        verify_concat_fragment_contents(catalogue, 'local_settings.py', [
+          "OPENSTACK_IMAGE_BACKEND = {",
+          "    'image_formats': [",
+          "        ('', _('Select image format')),",
+          "        ('aki', _('AKI - Amazon Kernel Image')),",
+          "        ('ami', _('AMI - Amazon Machine Image')),",
+          "        ('ari', _('ARI - Amazon Ramdisk Image')),",
+          "        ('iso', _('ISO - Optical Disk Image')),",
+          "        ('qcow2', _('QCOW2 - QEMU Emulator')),",
+          "        ('raw', _('Raw')),",
+          "        ('vdi', _('VDI')),",
+          "        ('vhi', _('VHI')),",
+          "        ('vmdk', _('VMDK')),",
+          "    ], # image_formats",
+          "    'architectures': [",
+          "        ('', _('Select architecture')),",
+          "        ('x86_64', _('x86-64')),",
+          "        ('aarch64', _('ARMv8')),",
+          "    ], # architectures",
+          "} # OPENSTACK_IMAGE_BACKEND",
+        ])
+      end
+    end
   end
 
   context 'on RedHat platforms' do
@@ -363,7 +432,9 @@ describe 'horizon' do
     before do
       facts.merge!({
         :osfamily               => 'Debian',
-        :operatingsystemrelease => '6.0'
+        :operatingsystem        => 'Debian',
+        :operatingsystemrelease => '6.0',
+        :os_package_type        => 'debian'
       })
     end
 
@@ -381,4 +452,30 @@ describe 'horizon' do
       ])
     end
   end
+
+  context 'on Ubuntu platforms' do
+    before do
+      facts.merge!({
+        :osfamily               => 'Debian',
+        :operatingsystem        => 'Ubuntu',
+        :operatingsystemrelease => '14.04',
+        :os_package_type        => 'ubuntu'
+      })
+    end
+
+    let :platforms_params do
+      { :config_file       => '/etc/openstack-dashboard/local_settings.py',
+        :package_name      => 'openstack-dashboard',
+        :root_url          => '/horizon' }
+    end
+
+    it_behaves_like 'horizon'
+
+    it 'sets WEBROOT in local_settings.py' do
+      verify_concat_fragment_contents(catalogue, 'local_settings.py', [
+        "WEBROOT = '/horizon/'",
+      ])
+    end
+  end
+
 end
