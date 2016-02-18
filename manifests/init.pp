@@ -231,7 +231,7 @@
 #  [*api_versions*]
 #    (optional) A hash of parameters to set specific api versions.
 #    Example: api_versions => {'identity' => 3}
-#    Default to empty hash
+#    Default to 'identity' => 3
 #
 #  [*keystone_multidomain_support*]
 #    (optional) Enables multi-domain in horizon. When this is enabled, it will require user to enter
@@ -257,7 +257,7 @@
 #    Defaults to undef.
 #
 #  [*session_timeout*]
-#    (optional) The session timeout for horizon in seconds. After this manys seconds of inavtivity
+#    (optional) The session timeout for horizon in seconds. After this many seconds of inactivity
 #    the user is logged out.
 #    Defaults to 1800.
 #
@@ -316,7 +316,7 @@ class horizon(
   $tuskar_ui_deployment_mode           = 'scale',
   $custom_theme_path                   = undef,
   $redirect_type                       = 'permanent',
-  $api_versions                        = {},
+  $api_versions                        = {'identity' => '3'},
   $keystone_multidomain_support        = false,
   $keystone_default_domain             = undef,
   $image_backend                       = {},
@@ -390,21 +390,14 @@ class horizon(
     order   => '50',
   }
 
-  # debian/ubuntu do not use collect static as the packaging already handles
-  # this as part of the packages. This was put in as a work around for Debian
-  # who has since fixed their packaging.
-  # See I813b5f6067bb6ecce279cab7278d9227c4d31d28 for the original history
-  # behind this section.
-  if $::os_package_type == 'rpm' {
-    exec { 'refresh_horizon_django_cache':
-      command     => "${::horizon::params::manage_py} collectstatic --noinput --clear && ${::horizon::params::manage_py} compress --force",
-      refreshonly => true,
-      require     => Package['horizon'],
-    }
+  exec { 'refresh_horizon_django_cache':
+    command     => "${::horizon::params::manage_py} collectstatic --noinput --clear && ${::horizon::params::manage_py} compress --force",
+    refreshonly => true,
+    require     => Package['horizon'],
+  }
 
-    if $compress_offline {
-      Concat[$::horizon::params::config_file] ~> Exec['refresh_horizon_django_cache']
-    }
+  if $::os_package_type == 'rpm' and $compress_offline {
+    Concat[$::horizon::params::config_file] ~> Exec['refresh_horizon_django_cache']
   }
 
   if $configure_apache {
